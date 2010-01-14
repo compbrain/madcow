@@ -41,7 +41,8 @@ class SilcPlugin(madcow.Madcow, silc.SilcClient):
         madcow.Madcow.__init__(self, config, prefix, scheme)
         keys = silc.create_key_pair('silc.pub', 'silc.priv', passphrase='')
         nick = self.config.silcplugin.nick
-        silc.SilcClient.__init__(self, keys, nick, nick, nick)
+        silc.SilcClient.__init__(self, keys, nick, nick, nick,
+                                 serverpass=self.config.silcplugin.password)
         self.channels = madcow.delim_re.split(self.config.silcplugin.channels)
 
         # throttling
@@ -155,6 +156,9 @@ class SilcPlugin(madcow.Madcow, silc.SilcClient):
 
     def send_to_user(self, user, message):
         self._privmsg(self.send_private_message, user, message)
+
+    def failure(self):
+        log.exception('SILC Protocol Error')
 
 
 ProtocolHandler = SilcPlugin
