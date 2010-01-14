@@ -44,6 +44,9 @@ class Shorten(Module):
             data = doc.read()
             b = BeautifulSoup.BeautifulSoup(data)
             titlestr = b.find('title').string
+            titlestr = titlestr.replace('\r', '')
+            titlestr = titlestr.replace('\n', '')
+            titlestr = titlestr.replace('\t', ' ')
             if len(titlestr) > self.max_length:
                 return titlestr[:self.max_length] + '...'
             else:
