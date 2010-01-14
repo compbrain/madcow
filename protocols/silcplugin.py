@@ -44,6 +44,7 @@ class SilcPlugin(madcow.Madcow, silc.SilcClient):
         silc.SilcClient.__init__(self, keys, nick, nick, nick,
                                  serverpass=self.config.silcplugin.password)
         self.channels = madcow.delim_re.split(self.config.silcplugin.channels)
+        self.curchannels = []
 
         # throttling
         self.delay = self.config.silcplugin.delay / float(1000)
@@ -114,8 +115,22 @@ class SilcPlugin(madcow.Madcow, silc.SilcClient):
 
     def connected(self):
         log.info(u'* Connected')
+        self.update_channels()
+
+    def update_channels(self):
+        self.channels = madcow.delim_re.split(self.config.silcplugin.channels)
+        log.info(u'Current Chans %s' % str(self.curchannels))
+        log.info(u'Configed Chans %s' % str(self.channels))
         for channel in self.channels:
-            self.command_call(u'JOIN %s' % channel)
+            if channel not in self.curchannels:
+                log.info(u'Joining %s' % channel)
+                self.command_call(u'JOIN %s' % channel)
+                self.curchannels.append(channel)
+        for channel in self.curchannels:
+            if channel not in self.channels:
+                log.info(u'Leaving %s' % channel)
+                self.command_call(u'PART %s' % channel)
+                self.curchannels.remove(channel)
 
     def disconnected(self, msg):
         log.warn(u'* Disconnected: %s' % msg)

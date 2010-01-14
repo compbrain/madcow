@@ -185,9 +185,24 @@ class Madcow(object):
 
     def reload_modules(self):
         """Reload all modules"""
+        self.reload_config()
         log.info(u'reloading modules')
         self.modules.load_modules()
         self.periodics.load_modules()
+        try:
+            log.info(u'reloading channels')
+            self.update_channels()
+        except Exception, error:
+            log.error('error updating channels: %s', error)
+
+    def reload_config(self):
+        log.info(u'reloading config')
+        try:
+            defaults = os.path.join(self.prefix, DEFAULTS)
+            cf = Config(self.config._settings_file, defaults)
+            self.config = cf
+        except Exception, error:
+            log.error('error parsing config: %s', error)
 
     ### OUTPUT FUNCTIONS
 
