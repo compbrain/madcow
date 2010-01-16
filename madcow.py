@@ -698,7 +698,7 @@ class Modules(object):
         configured_mods = []
         disabled = list(self._ignore_mods)
         for mod_name, enabled in self.madcow.config.modules:
-          configured_mods = []
+          configured_mods.append(mod_name)
           if not enabled:
               disabled.append(mod_name)
         private = self.private_module_list()
@@ -710,7 +710,6 @@ class Modules(object):
             filenames = os.listdir(self.mod_dir)
             names = [self._pyext.sub(u'', x)
                      for x in filenames if self._pyext.search(x)]
-            names.sort()
             return names
         except Exception, error:
             log.warn("Couldn't load modules from %s: %s", self.mod_dir, error)
@@ -783,6 +782,13 @@ class Modules(object):
                 self.reload_module(mod_name)
             else:
                 self.do_load_module(mod_name)
+
+        for mod_name in list(self.modules.keys()):
+            if mod_name not in configured_mods:
+              log.debug('Unloading module that fell out of config: %s', 
+                        mod_name)
+              self.try_unload_module(mod_name)
+
 
     def by_priority(self):
         """Return list of tuples for modules, sorted by priority"""
