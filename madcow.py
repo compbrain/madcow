@@ -495,6 +495,7 @@ class Admin(object):
     _auth_re = re.compile(u'^\s*(?:log[io]n|auth)\s+(\S+)\s*$', re.I)
     _fist_re = re.compile(u'^\s*fist\s+(\S+)\s+(.+)$', re.I)
     _help_re = re.compile(u'^\s*help\s*$', re.I)
+    _reload_re = re.compile(u'^\s*reload\s*$', re.I)
     _logout_re = re.compile(u'^\s*log(?:out|off)\s*$', re.I)
     _deluser_re = re.compile(r'\s*del(?:ete)?\s+(\S+)\s*$', re.I)
     _list_users_re = re.compile(r'\s*list\s+users\s*$', re.I)
@@ -540,6 +541,11 @@ class Admin(object):
             return self.authuser(nick, passwd)
         except AttributeError:
             pass
+
+        # reload
+        if self._reload_re.search(command):
+            self.bot.reload_modules()
+            return u'Reloading modules and configuration.'
 
         # help
         usage = []
