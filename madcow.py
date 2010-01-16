@@ -669,7 +669,6 @@ class Admin(object):
 
 
 class Modules(object):
-
     """This class dynamically loads plugins and instantiates them"""
 
     _pyext = re.compile(r'\.py$')
@@ -683,74 +682,101 @@ class Modules(object):
         self.help = []
         self.load_modules()
 
-    def load_modules(self):
-        """Load/reload modules"""
+    def private_module_list(self):
+        return delim_re.split(self.madcow.config.modules.private)
+
+    def is_private(self, mod_name):
+        return mod_name in self.private_module_list()
+
+    def get_module_lists(self):
+        configured_mods = []
         disabled = list(self._ignore_mods)
         for mod_name, enabled in self.madcow.config.modules:
-            if not enabled:
-                disabled.append(mod_name)
-        private = delim_re.split(self.madcow.config.modules.private)
+          configured_mods = []
+          if not enabled:
+              disabled.append(mod_name)
+        private = self.private_module_list()
+        return configured_mods, disabled, private
+
+    def get_module_names(self):
         log.info('reading modules from %s', self.mod_dir)
         try:
             filenames = os.listdir(self.mod_dir)
+            names = [self._pyext.sub(u'', x)
+                     for x in filenames if self._pyext.search(x)]
+            names.sort()
+            return names
         except Exception, error:
             log.warn("Couldn't load modules from %s: %s", self.mod_dir, error)
             log.exception(error)
-            return
-        for filename in filenames:
-            if not self._pyext.search(filename):
-                continue
-            mod_name = self._pyext.sub(u'', filename)
-            if mod_name in disabled:
-                log.debug('skipping %s: disabled', mod_name)
-                continue
-            if mod_name in self.modules:
-                mod = self.modules[mod_name][u'mod']
-                try:
-                    reload(mod)
-                    log.debug('reloaded module %s', mod_name)
-                except Exception, error:
-                    log.warn("couldn't reload %s: %s", mod_name, error)
-                    del self.modules[mod_name]
-                    continue
-            else:
-                try:
-                    mod = __import__(u'%s.%s' % (self.subdir, mod_name),
-                                     globals(), locals(), [u'Main'])
-                except Exception, error:
-                    log.warn("couldn't load module %s: %s", mod_name, error)
-                    continue
-                self.modules[mod_name] = {u'mod': mod,
-                                          u'private': mod_name in private}
-            try:
-                obj = mod.Main(self.madcow)
-            except Exception, error:
-                log.warn("failure loading %s: %s", mod_name, error)
-                del self.modules[mod_name]
-                continue
-            if not obj.enabled:
-                log.debug("skipped loading %s: disabled", mod_name)
-                del self.modules[mod_name]
-                continue
-            try:
-                if not obj.help:
-                    raise AttributeError
-                self.help.append(obj.help)
-            except AttributeError:
-                log.debug('no help for module: %s', mod_name)
-            self.modules[mod_name][u'obj'] = obj
-            log.debug('loaded module: %s', mod_name)
+            return []
 
-        # if debug level set, show execution order/details of modules
-        if log.root.level <= log.DEBUG:
-            try:
-                for mod_name, mod in self.by_priority():
-                    log.debug('%-13s: pri=%3s thread=%-5s stop=%s',
-                              mod_name, obj.priority,
-                              obj.allow_threading,
-                              obj.terminate)
-            except AttributeError:
-                pass
+    def is_loaded(self, mod_name):
+        return mod_name in self.modules
+
+    def unload_module(self, mod_name):
+        log.debug("unloading %s", mod_name)
+        del self.modules[mod_name]
+        return True
+
+    def reload_module(self, mod_name):
+        mod = self.modules[mod_name][u'mod']
+        try:
+            reload(mod)
+            log.debug('reloaded module %s', mod_name)
+        except Exception, error:
+            log.warn("couldn't reload %s: %s", mod_name, error)
+            self.unload_module(mod_name)
+
+    def try_unload_module(self, mod_name):
+      if self.is_loaded(mod_name):
+        return self.unload_module(mod_name)
+
+    def load_module(self, mod_name):
+        try:
+            mod = __import__(u'%s.%s' % (self.subdir, mod_name),
+                              globals(), locals(), [u'Main'])
+            self.modules[mod_name] = {u'mod': mod,
+                                      u'private': self.is_private(mod_name)}
+            return mod
+        except Exception, error:
+            log.warn("couldn't load module %s: %s", mod_name, error)
+            return
+
+    def do_load_module(self, mod_name):
+        mod = self.load_module(mod_name)
+
+        try:
+            obj = mod.Main(self.madcow)
+        except Exception, error:
+            log.warn("failure loading %s: %s", mod_name, error)
+            self.unload_module(mod_name)
+            return
+
+        if not obj.enabled:
+            self.unload_module(mod_name)
+            return
+
+        try:
+            if not obj.help:
+                raise AttributeError
+            self.help.append(obj.help)
+        except AttributeError:
+            log.debug('no help for module: %s', mod_name)
+        self.modules[mod_name][u'obj'] = obj
+        log.debug('loaded module: %s', mod_name)
+      
+    def load_modules(self):
+        """Load/reload modules"""
+        configured_mods, disabled, private = self.get_module_lists()
+        for mod_name in self.get_module_names():
+            if mod_name in disabled:
+                if not self.try_unload_module(mod_name):
+                    log.debug('skipping %s: disabled', mod_name)
+            elif mod_name in self.modules:
+                self.reload_module(mod_name)
+            else:
+                self.do_load_module(mod_name)
 
     def by_priority(self):
         """Return list of tuples for modules, sorted by priority"""
