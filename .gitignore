@@ -1,2 +1,8 @@
 *.pyc
 madcow.ini
+silc.priv
+silc.pub
+logs/*
+data/*
+madcow.pid
+grufti-responses.txt
