@@ -1,4 +1,5 @@
 # Copyright (C) 2007, 2008 Christopher Jones
+# vim: set shiftwidth=4 tabstop=4 softtabstop=4 :
 #
 # This file is part of Madcow.
 #
@@ -46,12 +47,11 @@ class IRCProtocol(Madcow):
             log.info(u'[IRC] * Registering event: %s' % event)
             self.server.add_global_handler(event,
                                            getattr(self, u'on_' + event), 0)
-        if self.config.irc.channels is not None:
-            self.channels = delim_re.split(self.config.irc.channels)
-        else:
-            self.channels = []
+        self.joined_channels = []
+        self.channels = []
         self.names = {}
         self.last_names_update = unix_time()
+        self.update_channel_list()
 
         # throttling
         self.delay = self.config.irc.delay / float(1000)
@@ -63,6 +63,11 @@ class IRCProtocol(Madcow):
             self.last_keepalive = self.last_pong = unix_time()
             self.keepalive_freq = self.config.irc.keepalive_freq
             self.keepalive_timeout = self.config.irc.keepalive_timeout
+
+    def update_channel_list(self, force=False):
+        if ((force or not self.channels)
+            and self.config.irc.channels is not None):
+              self.channels = delim_re.split(self.config.irc.channels)
 
     def connect(self):
         log.info(u'[IRC] * Connecting to %s:%s' % (
@@ -136,6 +141,9 @@ class IRCProtocol(Madcow):
         """welcome event triggers startup sequence"""
         log.info(u'[IRC] * Connected')
 
+        # clear any connected channel listing
+        self.joined_channels = []
+
         # identify with nickserv
         if self.config.irc.nickServUser and self.config.irc.nickServPass:
             self._privmsg(self.config.irc.nickServUser,
@@ -147,9 +155,28 @@ class IRCProtocol(Madcow):
             self.server.oper(self.config.irc.operUser, self.config.irc.operPass)
 
         # join all channels
+        self.join_channels()
+
+    def update_channels(self):
+        self.update_channel_list(force=True)
+        log.info(u'[IRC] * Current Channels: %s' % str(self.joined_channels))
+        log.info(u'[IRC] * Configured Channels: %s' % str(self.channels))
+        self.join_channels()
+        self.part_channels()
+
+    def join_channels(self):
         for channel in self.channels:
-            log.info(u'[IRC] * Joining: %s' % channel)
-            self.server.join(channel)
+            if channel not in self.joined_channels:
+                log.info(u'[IRC] * Joining: %s' % channel)
+                self.server.join(channel)
+                self.joined_channels.append(channel)
+
+    def part_channels(self):
+        for channel in self.joined_channels:
+            if channel not in self.channels:
+                log.info(u'[IRC] * Leaving: %s' % channel)
+                self.server.part(channel)
+                self.joined_channels.remove(channel)
 
     def on_disconnect(self, server, event):
         """disconnected from IRC"""
