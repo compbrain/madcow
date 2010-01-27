@@ -110,6 +110,8 @@ class Shorten(Module):
           apiurl = 'http://metamark.net/api/rest/simple'
           urlargs = urllib.urlencode({'long_url':url})
           tinyurl = urllib.urlopen(apiurl, urlargs).read()
+          assert tinyurl[:13] == 'http://xrl.us'
+          assert len(tinyurl) < 30
           return tinyurl
         except Exception, error:
           log.exception(error)
